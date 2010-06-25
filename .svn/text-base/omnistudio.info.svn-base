@@ -1,0 +1,4 @@
+; $Id$ 
+name = Omnistudio Custom Blocks
+description = Implements Custom Blocks. 
+version = "$name$"

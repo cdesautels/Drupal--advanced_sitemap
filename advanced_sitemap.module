@@ -1,0 +1,296 @@
+<?php 
+// $Id$ 
+/** 
+ * @file 
+ * Implements configurable sitemap. 
+ */ 
+
+function advanced_sitemap_menu() {
+  $items = array();
+    $items['sitemap'] = array(
+      'title' => 'Sitemap',
+      'description' => 'Description',
+      'page callback' => 'advanced_sitemap',
+      'access arguments' => array('View sitemap')
+    );
+    $items['admin/settings/sitemap'] = array(
+      'title' => 'Sitemap settings',
+      'description' => 'Control the site map',
+      'page callback' => 'advanced_sitemap_admin',
+      'access arguments' => array('Administer sitemap')
+    );
+    return $items;
+}
+function advanced_sitemap_perm() {
+  return array('View sitemap','Administer sitemap');
+}
+
+function advanced_sitemap_help($path = '', $arg = NULL) {
+  $output = '';
+  switch ($path) {
+    case 'admin/help/advanced_sitemap':
+      $output = '<p>The sitemap module builds a sitemap from any menu in the Drupal menu system, both default and custom menus. Drupal normally builds a menu as one unordered list. This module provides some flexibility by breaking the selected menus in multiple unordered lists. So you can build site maps in multiple columns. The column breaks key off of the link titles in the menus.</p>
+<p>It also provides facility for adding links that don\'t exist in the menu system through a set of prefix and suffix links, appearing as unordered lists at the top and bottom of the sitemap There are also optional wrappers for each selected menu and the prefix and suffix links.</p>
+<p>The module doesn\'t style anything or create columns. It just breaks the menus up into separate lists and wrapper divs which you can then manipulate with CSS.</p>
+';
+      break;
+  }
+  return $output;
+}
+
+function advanced_sitemap() {
+  $sitemapSettings = variable_get('advanced_sitemap',null);
+  $output = '<div id="sitemap">';
+  $output .= _additionalItemsOutput('prefix', $sitemapSettings['prefixlinks'], $sitemapSettings['prefix-wrapper'],$sitemapSettings['columnBreaks']);
+  asort($sitemapSettings['menus']);
+  foreach ($sitemapSettings['menus'] as $menuKey => $menuWeight) {
+    $sitemapSettings['menu-wrappers'][$menuKey] ? $output .= '<div class="' . $menuKey . '-wrapper">' : null;
+    $output .= _advanced_sitemap_menu_tree($menuKey, $sitemapSettings['columnBreaks']);
+    $sitemapSettings['menu-wrappers'][$menuKey] ? $output .= '</div>' : null;
+  }
+  $output .= _additionalItemsOutput('suffix', $sitemapSettings['suffixlinks'], $sitemapSettings['suffix-wrapper'],$sitemapSettings['columnBreaks']);
+  $output .= '</div>';
+  return $output;
+}
+
+function _advanced_sitemap_menu_tree($menu_name = 'navigation',$breakAtTitles) {
+  static $menu_output = array();
+
+  if (!isset($menu_output[$menu_name])) {
+    $tree = menu_tree_page_data($menu_name);
+    $menu_output[$menu_name] = _advanced_sitemap_menu_tree_output($tree,$breakAtTitles);
+  }
+  return $menu_output[$menu_name];
+}
+
+function _advanced_sitemap_menu_tree_output($tree,$breakAtTitles) {
+  $output = '';
+  $items = array();
+  // Pull out just the menu items we are going to render so that we
+  // get an accurate count for the first/last classes.
+  foreach ($tree as $data) {
+    if (!$data['link']['hidden']) {
+      $items[] = $data;
+    }
+  }
+  $num_items = count($items);
+  foreach ($items as $i => $data) {
+    $link = theme('menu_item_link', $data['link']);
+    // Starts a new column
+    if (in_array($data['link']['title'], $breakAtTitles)) {
+      $output .= '</ul><ul class="sitemap-column">';
+    }
+    if ($data['below']) {
+      $output .= _advanced_sitemap_theme_menu_item($link, $data['link']['has_children'], _advanced_sitemap_menu_tree_output($data['below'],$breakAtTitles));
+    }
+    else {
+      $output .= _advanced_sitemap_theme_menu_item($link, $data['link']['has_children'], '');
+    }
+  }
+  return $output ? theme('menu_tree', $output) : '';
+}
+
+function _advanced_sitemap_theme_menu_item($link, $has_children, $menu = '') {
+  $class = ($menu ? 'expanded' : ($has_children ? 'collapsed' : 'leaf'));
+  return '<li class="'. $class .'">'. $link . $menu ."</li>\n";
+}
+
+function _additionalItemsOutput($type, $links, $wrapper, $breaks) {
+  $wrapper ? $output = '<div class="' . $type . '-wrapper">' : null;
+  $output .= '<ul class="sitemap-' . $type . '">';
+  foreach ($links as $link) {
+    if (in_array($link[0], $breaks)) {
+      $output .= '</ul><ul class="sitemap-column">';
+    }
+    
+    $output .= '<li>';
+    $output .= l($link[0],$link[1]);
+    $output .= '</li>';
+  }
+  $output .= '</ul>';
+  $wrapper ? $output .= '</div>' : null;
+  return $output;
+}
+
+ 
+/*  ===============
+    ADMIN FUNCTIONS
+    ===============*/
+function advanced_sitemap_admin() {
+  $path = drupal_get_path('module', 'advanced_sitemap');
+  drupal_add_css($path .'/advanced_sitemap.css', 'module', 'all', FALSE);
+  $output .= '<p class="sitemap-instructions">' . l('Instructions','admin/help/advanced_sitemap') . ' | ' . l('View Sitemap', 'sitemap') . '</p>';
+  $output .= drupal_get_form('sitemap_admin_form');
+  return $output;
+}
+function sitemap_admin_form() {
+  $sitemapSettings = variable_get('advanced_sitemap',null);
+  //print_r($sitemapSettings);
+  $availableMenus = menu_get_names();
+    $form['menus'] = array(
+  '#type' => 'fieldset',
+  '#title' => t('<h3>Available Menus</h3>'),
+  '#collapsible' => FALSE,
+  '#tree' => TRUE,
+  '#description' => t('Select the menus you want to appear in the sitemap.')
+);
+  $form['menus']['listStart'] = array(
+    '#value' => '<table><tr><td>Menus</td><td>Weight</td><td class="center">Wrapper</td></tr>'
+  );
+  foreach ($availableMenus as $m) {
+    $form['menus'][$m] = array(
+      '#prefix' => '<tr><td class="sitemapAdminCell">',
+      '#type' => 'checkbox', 
+      '#title' => t($m),
+      '#return_value' => $m,
+      '#suffix' => '</td>',
+      '#default_value' => _populateAdminMenus($m, $sitemapSettings['menus'])
+    );
+    $form['menus'][$m . '-weight'] = array(
+      '#prefix' => '<td class="sitemapAdminCell">',
+      '#type' => 'textfield',
+      '#size' => 2,
+      '#suffix' => '</td>',
+      '#default_value' => $sitemapSettings['menus'][$m]
+    );
+    $form['menus'][$m . '-wrapper'] = array(
+      '#prefix' => '<td class="sitemapAdminCell center">',
+      '#type' => 'checkbox',
+      '#size' => 20,
+      '#suffix' => '</td></tr>',
+      '#default_value' => $sitemapSettings['menu-wrappers'][$m]
+    );
+  }
+  $form['menus']['listEnd'] = array(
+    '#value' => '</table>'
+  );
+  
+  $form['columnBreaks'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Column Breaks'),
+    '#description' => t('Insert the titles of the menu items that start new columns, 1 title per line.'),
+    '#default_value' => _populateColumnBreaks($sitemapSettings['columnBreaks'])
+  );
+  
+  
+  $form['prefix'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Prefix Links'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+    
+  $form['prefix']['prefixlinks'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Optional links at the top of the sitemap'),
+    '#description' => t('Format: Link title and URL seperated by a comma, example: "Link Title,node/123", New line for each link, NO LEADING SLASH ON THE URLs'),
+    '#default_value' => _populateAdminLinks($sitemapSettings['prefixlinks'])
+  );
+  $form['prefix']['prefixlinks-wrapper'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Optional wrapper for the prefix links'),
+    '#description' => t('Optional wrapper for the prefix links.'),
+    '#default_value' => $sitemapSettings['prefix-wrapper']
+  );
+  
+  $form['suffix'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Suffix Links'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $form['suffix']['suffixlinks'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Optional links at the bottom of the sitemap'),
+    '#description' => t('Format: Link title and URL seperated by a comma, example: "Link Title,node/123", New line for each link, NO LEADING SLASH ON THE URLs'),
+    '#default_value' => _populateAdminLinks($sitemapSettings['suffixlinks'])
+  );
+  $form['suffix']['suffixlinks-wrapper'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Optional wrapper for the suffix links'),
+    '#description' => t('Optional wrapper for the suffix links.'),
+    '#default_value' => $sitemapSettings['suffix-wrapper']
+  );
+  
+  $form['submit'] = array('#type' => 'submit', '#value' => t('Save'));
+  return $form;
+}
+function sitemap_admin_form_validate($form, &$form_state) {
+  
+}
+
+function sitemap_admin_form_submit($form, &$form_state) {
+  $output = array();
+  $availableMenus = menu_get_names();
+  foreach ($availableMenus as $m) {
+    if ($form_state['values']['menus'][$m] != '') {
+      //$includedMenus[$form_state['values']['menus'][$m]] = array('weight' => $form_state['values']['menus'][$m . '-weight']);
+      $includedMenus[$form_state['values']['menus'][$m]] = $form_state['values']['menus'][$m . '-weight'];
+      $includedMenuWrappers[$form_state['values']['menus'][$m]] = $form_state['values']['menus'][$m . '-wrapper'];
+    }
+  }
+  $output['menus'] = $includedMenus;
+  $output['menu-wrappers'] = $includedMenuWrappers;
+  $output['prefix-wrapper'] = $form_state['values']['prefixlinks-wrapper'];
+  $output['suffix-wrapper'] = $form_state['values']['suffixlinks-wrapper'];
+  $output['prefixlinks'] = _breakApartLinks($form_state['values']['prefixlinks']);
+  $output['suffixlinks'] = _breakApartLinks($form_state['values']['suffixlinks']);
+  $output['columnBreaks'] = _breakApartColumnBreaks($form_state['values']['columnBreaks']);
+  variable_set('advanced_sitemap', $output);
+}
+/*  =================
+    UTILITY FUNCTIONS
+    =================*/
+function _breakAtTitles() {
+  $output = array('Publications & Resources');
+  return $output;
+}
+function _includedMenus() {
+  $output = array('primary-links');
+  return $output;
+}
+function _breakApartLinks($data) {
+  $explodedLines = preg_split("[\n|\r|\r\n]", $data);
+  foreach ($explodedLines as $key => $value) {
+      if (is_null($value) || $value=="") {
+        unset($explodedLines[$key]);
+      } else {
+        $explodedLines[$key] = explode(',', $value);
+        $explodedLines[$key][1] = trim($explodedLines[$key][1]);
+      }
+  }
+  return $explodedLines;
+}
+function _breakApartColumnBreaks($data) {
+  $explodedLines = preg_split("[\n|\r|\r\n]", $data);
+  foreach ($explodedLines as $key => $value) {
+      if (is_null($value) || $value=="") {
+        unset($explodedLines[$key]);
+      }
+    }
+  return $explodedLines;
+}
+
+function _populateAdminLinks($linksArray) {
+  if (isset($linksArray)) {
+    foreach ($linksArray as $link) {
+      $output .= $link[0] . ',' . $link[1] . "\n";
+    }
+    return $output;
+  }
+}
+
+function _populateAdminMenus($m,$storedMenus) {
+      if (isset($storedMenus) && array_key_exists($m, $storedMenus)) {
+        return TRUE;
+      } else {
+        return FALSE;
+      }
+}
+
+function _populateColumnBreaks($breaks) {
+  if (isset($breaks)) {
+    return implode("\n", $breaks);
+  }
+}

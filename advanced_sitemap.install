@@ -1,0 +1,10 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Manages the install and uninstall of custom table 'advanced_sitemap'.
+*/
+function advanced_sitemap_uninstall() {
+  // Delete the settings stored in the variables table.
+  variable_del('advanced_sitemap');;
+} 

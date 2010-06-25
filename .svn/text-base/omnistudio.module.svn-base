@@ -1,0 +1,50 @@
+<?php 
+// $Id$ 
+/** 
+ * @file 
+ * Implements various custom blocks for NYCLA. 
+ */ 
+
+/** 
+ * Implementation of hook_block(). 
+ */ 
+function omnistudio_block($op = 'list', $delta = 0, $edit = array()) {
+  global $user,$base_url;
+  $directory=path_to_theme();
+  switch ($op) { 
+    case 'list': 
+      $blocks[0]['info'] = t('Top Navigation Right');
+      $blocks[1]['info'] = t('Video Player');  
+      return $blocks;
+      break;
+    case 'view':
+      if ($delta == 0) {
+        $block['subject']= '';
+        $block['content']= '<a href="#skipTopNav"></a>';
+        $block['content'].= '<p>';
+        if (!$user->uid) {
+          $block['content'].="<a href=\"{$base_url}/login\">Login</a> | <a href=\"#\">Register</a>";
+        }
+        else {
+          $block['content'].="<a href=\"{$base_url}/logout\">Logout</a> ";
+        }
+        $block['content'].="| <a href=\"{$base_url}/who_we_are/contact\">Contact Us</a> | <a href=\"#\">Sitemap</a> <a href=\"{$base_url}/rss\"><img src=\"{$base_url}/{$directory}/images/nav/rssIcon.gif\" alt=\"RSS Feed\" width=\"16\" height=\"17\" border=\"0\" class=\"icon\" /></a><a href=\"#\"><img src=\"{$base_url}/{$directory}/images/nav/printIcon.gif\" alt=\"Print version of this page\" width=\"16\" height=\"17\" border=\"0\" class=\"icon\" /></a><a href=\"#\"><img src=\"{$base_url}/{$directory}/images/nav/emailIcon.gif\" alt=\"Email this page\" width=\"16\" height=\"17\" border=\"0\" class=\"icon\" /></a></p>";
+      }
+      elseif ($delta == 1) {
+        $block['subject'] = '';
+        $block['content'] = "<script type=\"text/javascript\" src=\"{$base_url}/{$directory}/includes/js/swfobject/swfobject.js\"></script>";
+        $block['content'] .= "<div id=\"flashcontent\">videoplayer</div>";
+        $block['content'] .= "<script type=\"text/javascript\">";
+        $block['content'] .= "var so = new SWFObject(\"{$base_url}/{$directory}/includes/flash/videoPlayer.swf\", \"name\", \"420\", \"316\", \"8\", \"#FFFFFF\");";
+        $block['content'] .= "so.addVariable(\"xmlFile\", \"{$base_url}/videoxml\");";
+        $block['content'] .= "so.addVariable(\"videoPath\", \"{$base_url}/files/videos/\");";
+        $block['content'] .= "so.addVariable(\"previewPath\", \"{$base_url}/files/videos/previews/\");";
+        $block['content'] .= "so.useExpressInstall('{$base_url}/{$directory}/includes/js/swfobject/expressinstall.swf');";
+        $block['content'] .= "so.write(\"flashcontent\");";
+        $block['content'] .= "</script>";
+      }
+
+      return $block;
+      break;
+  } 
+} 

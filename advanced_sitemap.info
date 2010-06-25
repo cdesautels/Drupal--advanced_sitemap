@@ -1,0 +1,5 @@
+; $Id$ 
+name = Advanced Sitemap
+description = Implements a configurable site map.
+core = 6.x
+version = 6.x-1.0
